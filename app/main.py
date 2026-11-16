@@ -14,32 +14,45 @@ def echo (args: list[str]):
 
     return b""
 
-commands = {
+available_commands = {
     "PING": ping,
     "ECHO": echo,
 }
 
 # TODO 
-def parse(reader: asyncio.StreamReader):
-    data = reader.readuntil(b"\r\n")
-    if data[0] == "*":  # array
+async def parse(reader: asyncio.StreamReader):
+    type = (await reader.readexactly(1)).decode('ascii')
+    if type == "*":  # arrayT
+        print("parsing RESP array...")
         # Extract the number of elements.
         # Call your parser recursively for each element.
         # Collect the returned values into a Python list.
         pass 
-    if data[0] == "$":  # bulk string
+    if type == "$":  # bulk string
+        print("parsing RESP bulk string")
         #   Extract the byte length.
+        string_length = (await reader.readuntil(b"\r\n"))[:-2].decode('utf-8')
+        if not string_length.isdigit():
+            print("ERROR: did not detect bulk string size in header")
+            return ''
         #   Read exactly that many bytes.
+        string = (await reader.readexactly(int(string_length))).decode('utf-8') 
+        print("reading bulk string: " + string)
         #   Consume the trailing 2-byte CRLF.
+        await(reader.readexactly(2))
         #   Return the string.
-        pass
+        return string
 
 async def handle_client(reader, writer):
     while True:
-        command, args = await parse(reader)
+        print("listening for message....")
+        message = (await parse(reader)).split(" ")
 
-        if command in commands:
-            writer.write(commands[command](args))
+        command, args = message[0], message[1:]
+        print("Command is: " + repr(command))
+
+        if command in available_commands:
+            writer.write(available_commands[command](args))
         else:
             writer.write(b"Unidentified command\n")
         
