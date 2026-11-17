@@ -2,6 +2,17 @@ import socket  # noqa: F401
 import asyncio
 
 
+# SERVER EXCEPTIONS
+
+class ClientDisconnected(Exception):
+    pass
+
+
+class ProtocolError(Exception):
+    pass
+
+# SERVER COMMANDS
+
 def ping(args: list[str]):
     if len(args) != 0:
         return b"PING: expected no argument\n"
@@ -21,8 +32,15 @@ available_commands = {
 
 # TODO 
 async def parse(reader: asyncio.StreamReader):
-    type = (await reader.readexactly(1)).decode('ascii')
-    if type == "*":  # arrayT
+    try:
+        type = (await reader.readexactly(1))
+    except asyncio.IncompleteReadError as e:
+        if len(e.partial) == 0: # client closed connection
+            raise ClientDisconnected()
+        
+    type = type.decode('ascii')
+
+    if type == "*":  # array
         print("parsing RESP array...")
         # Extract the number of elements.
         # Call your parser recursively for each element.
@@ -33,30 +51,41 @@ async def parse(reader: asyncio.StreamReader):
         #   Extract the byte length.
         string_length = (await reader.readuntil(b"\r\n"))[:-2].decode('utf-8')
         if not string_length.isdigit():
-            print("ERROR: did not detect bulk string size in header")
-            return ''
+            raise ProtocolError("Did not detect bulk string size in header")
         #   Read exactly that many bytes.
         string = (await reader.readexactly(int(string_length))).decode('utf-8') 
         print("reading bulk string: " + string)
         #   Consume the trailing 2-byte CRLF.
-        await(reader.readexactly(2))
-        #   Return the string.
+        crlf = await(reader.readexactly(2))
+        if crlf.decode('utf-8') != "\r\n":
+            raise ProtocolError("Did not see expected CRLF")
         return string
 
 async def handle_client(reader, writer):
-    while True:
-        print("listening for message....")
-        message = (await parse(reader)).split(" ")
+    try:
+        while True:
+            print("listening for message....")
+            message = (await parse(reader)).split(" ")
 
-        command, args = message[0], message[1:]
-        print("Command is: " + repr(command))
+            command, args = message[0], message[1:]
+            print("Command is: " + repr(command))
 
-        if command in available_commands:
-            writer.write(available_commands[command](args))
-        else:
-            writer.write(b"Unidentified command\n")
-        
-        await writer.drain()
+            if command in available_commands:
+                writer.write(available_commands[command](args))
+            else:
+                writer.write(b"Unidentified command\n")
+            
+            await writer.drain()
+    except ClientDisconnected:
+        print("Client disconnected.")
+
+    except ProtocolError as e:
+        print(f"Protocol error: {e}")
+        print("Closing connection.")
+
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 async def main():
     server = await asyncio.start_server(
