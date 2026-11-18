@@ -1,9 +1,10 @@
 import socket  # noqa: F401
 import asyncio
 
+# KEY-VALUE STORE
+store = {}
 
 # SERVER EXCEPTIONS
-
 class ClientDisconnected(Exception):
     pass
 
@@ -12,7 +13,6 @@ class ProtocolError(Exception):
     pass
 
 # SERVER COMMANDS
-
 def ping(args: list[bytes]):
     if len(args) != 0:
         return b"-ERR PING: expected no argument\r\n"
@@ -25,9 +25,29 @@ def echo (args: list[bytes]):
     message = args[0]
     return b"$" + str(len(message)).encode("ascii") + b"\r\n" + message + b"\r\n"
 
+def set(args: list[bytes]):
+    if len(args) != 2:
+        return b"-ERR SET: expected 2 arguments\r\n"
+    store[args[0]] = args[1]
+    return b"+OK\r\n"
+
+def get(args: list[bytes]):
+    if len(args) != 1:
+        return b"-ERR GET: expected 1 argument\r\n"
+    value = store.get(args[0])
+    if not value:
+        return b"$-1\r\n"
+
+    return b"$" + f"{len(value)}".encode() + b"\r\n" + value + b"\r\n"
+    
+
+
+# SERVER COMMANDS DICT
 available_commands = {
     "PING": ping,
     "ECHO": echo,
+    "SET": set,
+    "GET": get,
 }
 
 

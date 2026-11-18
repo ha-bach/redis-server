@@ -9,3 +9,15 @@ printf '*2\r\n$4\r\nECHO\r\n$11\r\nhello world\r\n' | nc localhost 6379
 
 # send PING, ECHO hello, ECHO hello world
 printf '*1\r\n$4\r\nPING\r\n*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n*2\r\n$4\r\nECHO\r\n$11\r\nhello world\r\n' | nc localhost 6379
+
+# send SET mykey 'hello world'
+printf '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$11\r\nhello world\r\n' | nc localhost 6379
+
+# send GET mykey
+printf '*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n' | nc localhost 6379
+
+# send GET missing
+printf '*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n' | nc localhost 6379
+
+# send SET mykey hello and GET mykey
+printf '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$5\r\nhello\r\n*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n' | nc localhost 6379
