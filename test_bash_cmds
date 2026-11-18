@@ -1,0 +1,11 @@
+# sends PING
+printf '*1\r\n$4\r\nPING\r\n' | nc localhost 6379
+
+# sends ECHO hello
+printf '*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n' | nc localhost 6379
+
+# sends ECHO hello world
+printf '*2\r\n$4\r\nECHO\r\n$11\r\nhello world\r\n' | nc localhost 6379
+
+# send PING, ECHO hello, ECHO hello world
+printf '*1\r\n$4\r\nPING\r\n*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n*2\r\n$4\r\nECHO\r\n$11\r\nhello world\r\n' | nc localhost 6379

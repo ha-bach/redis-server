@@ -15,13 +15,13 @@ class ProtocolError(Exception):
 
 def ping(args: list[bytes]):
     if len(args) != 0:
-        return b"PING: expected no argument\n"
+        return b"-ERR PING: expected no argument\r\n"
     
     return b"+PONG\r\n"
 
 def echo (args: list[bytes]):
     if len(args) != 1:
-        return b"PING: expected 1 argument\n"
+        return b"-ERR ECHO: expected 1 argument\r\n"
     message = args[0]
     return b"$" + str(len(message)).encode("ascii") + b"\r\n" + message + b"\r\n"
 
@@ -30,17 +30,19 @@ available_commands = {
     "ECHO": echo,
 }
 
-# TODO 
+
 async def parse(reader: asyncio.StreamReader):
     try:
-        type = (await reader.readexactly(1))
+        prefix = (await reader.readexactly(1))
     except asyncio.IncompleteReadError as e:
         if len(e.partial) == 0: # client closed connection
             raise ClientDisconnected()
+        else:   # partial read
+            raise ProtocolError("Unexpected EOF")
         
-    type = type.decode('ascii')
+    prefix = prefix.decode('ascii')
 
-    if type == "*":  # array
+    if prefix == "*":  # array
         print("parsing RESP array...")
         # Extract the number of elements.
         array_length = (await reader.readuntil(b"\r\n"))[:-2].decode('utf-8')
@@ -53,10 +55,10 @@ async def parse(reader: asyncio.StreamReader):
 
         return message
      
-    if type == "$":  # bulk string
+    if prefix == "$":  # bulk string
         print("parsing RESP bulk string")
         #   Extract the byte length.
-        string_length = (await reader.readuntil(b"\r\n"))[:-2].decode('utf-8')
+        string_length = (await reader.readuntil(b"\r\n"))[:-2]
         if not string_length.isdigit():
             raise ProtocolError("Did not see size in bulk string header.")
         
@@ -87,7 +89,7 @@ async def handle_client(reader, writer):
             if command in available_commands:
                 writer.write(available_commands[command](args))
             else:
-                writer.write(b"Unidentified command\n")
+                writer.write(b"-ERR Unidentified command\r\n")
             
             await writer.drain()
     except ClientDisconnected:
